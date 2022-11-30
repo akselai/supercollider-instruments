@@ -1,45 +1,57 @@
 (
 SynthDef.new(\comb_piano, {
-	arg out = 0, force = 1, freq = 440, rel = 4, sustain = 0, amp = 1,
+	arg out = 0, force = 1, freq, rel = 1, sustain = 0, amp = 1,
 	noise_freq = 20000, noise_attack = 0.002, noise_decay = 0.06,
-	detune = 1.0005, string_decay = 16,
+	detune = 1.002, stretch_coef = 1.005, string_decay = 16,
 	lpf_ratio = 1, lpf_rq = 1.0, damp = 0.0, damp_time = 16;
 
 	var noise, string, delaytime, lpf, noise_env, snd, damp_mul, freq_comp, hpf_c;
-	var stretch_coef = 1.005, reson = 0, reson_amp;
+	var detune_coef, reson = 0, reson_freq, reson_amp = 2000;
 	var hpf_f, env;
 	damp_mul = LagUD.ar(K2A.ar(1.0 - damp), 0, damp_time);
-
-	noise_env = Decay2.ar(Impulse.ar(0), 0.01); // TODO attack time
+	detune_coef = detune;
+	noise_env = Decay2.ar(Impulse.ar(0)!2, 0.001);
 	noise = LFNoise2.ar(noise_freq) * noise_env * 0.2;
 
-	delaytime = 1.0 / (freq * if(freq < 33.midicps, [1], [1/detune, 1, detune]));
-
+	delaytime = 1.0 / (freq *
+		if(freq < 33.midicps,
+			if(freq < 52.midicps,
+				[1/(detune_coef.sqrt), detune_coef.sqrt],
+				[1]
+			),
+			[1/detune_coef, 1, detune_coef])
+	);
+	// delaytime = 1.0 / (freq * [1/detune, 1, detune]);
 	freq_comp = 1000/freq;
-
-	string = Mix.new([
+	string = Mix.ar([
 		CombC.ar(noise, delaytime, delaytime, string_decay * damp_mul),
 	]);
 	snd = RLPF.ar(string, lpf_ratio * freq * freq_comp, lpf_rq) * force;// * freq_comp;
 
 	hpf_c = if(freq < 40, 20, 1/(0.191192 * log(freq) - 0.660568));
 	// ^ equal amplitude
-	hpf_f = freq * hpf_c * force / 2;
+	hpf_f = freq * hpf_c * force / 1.5;
 
 	reson_amp = min(force.squared, force / 8);
-	reson = Mix.ar(Resonz.ar(string, freq*
+
+	reson = Mix.ar(Resonz.ar(noise, freq*
 		(1..9).pow(stretch_coef),
         //[20]/1000; // control;
-	    [20, 10, 8, 7, 6, 5, 4, 3, 2] /1000;
-	) * [20, 10, 8, 7, 6, 5, 4, 3, 2] / 20);
+	    [20, 10, 8, 7, 6, 5, 4, 3, 2] /20000;
+	) * [40, 16, 8, 7, 6, 5, 4, 3, 2] *10);
 	// ^ simulates inharmonic partials
-	snd = snd + (reson * reson_amp);
 
+	/*
+	reson_freq = freq * (1..9).pow(stretch_coef);
+	reson = DynKlank.ar(`[reson_freq, nil, damp_time!9], noise);
+	*/
+	
+	snd = snd + (reson * 1);
 	snd = HPF.ar(LPF.ar(LeakDC.ar(snd), XLine.ar(hpf_f, hpf_f / 8, damp_time)), 0);
-
-	env = EnvGen.ar(Env.adsr(0.01, 0.2, 0.2, 0.3, 3), Trig.ar(1, rel));
+	
+	env = EnvGen.ar(Env.adsr(0.001, 0.4, 0.2, 0.3, 9), Trig.ar(1, rel));
 	snd = (snd) * (((1 - sustain) * env) + (sustain * 1));
-	Out.ar(out, snd.dup * amp);
+	Out.ar(out, snd * amp);
 	DetectSilence.ar(snd, doneAction:2);
 }).add();
 )
