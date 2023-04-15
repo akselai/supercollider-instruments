@@ -8,8 +8,9 @@ SynthDef.new(\bassoon, {
 	sig = Saw.ar(freq + vib, mul: vib / 10 + 1);
 	out = 0;
 	// resonate
-	reson_freq = `[500, 800, 1300, 2100];
-	reson_amp = `[1, 1, 0.3, 0.1];
+	reson_freq = [500, 800, 1300, 2100];
+	reson_amp = [1, 1, 0.3, 0.1];
+	
 	out = Mix.ar(MoogFF.ar(sig, reson_freq * ExpRand(0.9, 1.1), 3, mul:reson_amp));
 	out = out + MoogFF.ar(sig, freq*2, 3);
 	out = out + CombN.ar(sig, 1/freq, 1/freq, 0.01, 4 / freq);
